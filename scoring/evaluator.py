@@ -14,10 +14,13 @@ def evaluate_solution(solution: Solution) -> Solution:
     Valuta la soluzione calcolando uno score multi-obiettivo.
     Aggiorna i campi score e scores_detail della soluzione e la restituisce.
     """
-    # 1. Volume utilization (0.40)
+    # 0. Order fulfillment (0.50 - PRIORITÀ ASSOLUTA: % pannelli caricati sul totale ordine)
+    order_fulfillment = solution.placed_pct / 100.0
+
+    # 1. Volume utilization (0.25)
     vol_utilization = solution.utilization_pct / 100.0
 
-    # 2. Compactness (0.20)
+    # 2. Compactness (0.10)
     # Bounding box ratio: ratio of used volume vs bounding box volume of all pallets
     if not solution.container.pallets:
         compactness = 0.0
@@ -33,7 +36,7 @@ def evaluate_solution(solution: Solution) -> Solution:
         else:
             compactness = 0.0
 
-    # 3. Order grouping (0.20)
+    # 3. Order grouping (0.05)
     # Penalize orders split across distant pallets.
     order_positions = defaultdict(list)
     for p in solution.container.pallets:
@@ -64,7 +67,7 @@ def evaluate_solution(solution: Solution) -> Solution:
 
     order_grouping = sum(grouping_scores) / len(grouping_scores) if grouping_scores else 1.0
 
-    # 4. Stability (0.10)
+    # 4. Stability (0.05)
     # Penalize pallets with excessive overhang
     overhang_penalty = 0.0
     for p in solution.container.pallets:
@@ -81,7 +84,7 @@ def evaluate_solution(solution: Solution) -> Solution:
             
     stability = max(0.0, 1.0 - overhang_penalty)
 
-    # 5. Accessibility (0.10)
+    # 5. Accessibility (0.05)
     # Bonus for orders placed near the container door (high x = near door)
     if not solution.container.pallets:
         accessibility = 0.0
@@ -91,6 +94,7 @@ def evaluate_solution(solution: Solution) -> Solution:
         accessibility = sum(x_scores) / len(x_scores)
 
     scores_detail = {
+        "order_fulfillment": order_fulfillment,
         "volume_utilization": vol_utilization,
         "compactness": compactness,
         "order_grouping": order_grouping,

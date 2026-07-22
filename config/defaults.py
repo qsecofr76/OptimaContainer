@@ -69,11 +69,12 @@ GA_TARGET_UNIQUE_SOLUTIONS = 1000 # obiettivo soluzioni uniche
 # Pesi Scoring Multi-Obiettivo
 # ──────────────────────────────────────────────
 SCORE_WEIGHTS = {
-    "volume_utilization": 0.40,    # % volume utilizzato
-    "compactness": 0.20,           # minimizzare vuoti tra bancali
-    "order_grouping": 0.20,        # raggruppamento per ordine
-    "stability": 0.10,             # stabilità impilamenti
-    "accessibility": 0.10,         # accessibilità ordini dalla porta
+    "order_fulfillment": 0.50,     # % pannelli dell'ordine evasi (PRIORITÀ ASSOLUTA)
+    "volume_utilization": 0.25,    # % volume container utilizzato
+    "compactness": 0.10,           # minimizzare vuoti tra bancali
+    "order_grouping": 0.05,        # raggruppamento per ordine
+    "stability": 0.05,             # stabilità impilamenti
+    "accessibility": 0.05,         # accessibilità ordini dalla porta
 }
 
 # ──────────────────────────────────────────────

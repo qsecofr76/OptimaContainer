@@ -37,13 +37,26 @@ class Solution:
     def panel_count(self) -> int:
         return self.container.total_panels
 
+    @property
+    def total_order_panels(self) -> int:
+        """Totale pannelli presenti nell'ordine originale."""
+        return self.panel_count + len(self.unplaced_panel_ids)
+
+    @property
+    def placed_pct(self) -> float:
+        """Percentuale di pannelli caricati rispetto al totale dell'ordine."""
+        tot = self.total_order_panels
+        return (self.panel_count / tot * 100.0) if tot > 0 else 100.0
+
     def summary(self) -> str:
         """Riepilogo testuale della soluzione."""
+        tot_order = self.total_order_panels
+        pct_str = f" ({self.placed_pct:.1f}%)" if tot_order > 0 else ""
         lines = [
             f"== Soluzione #{self.iteration} ==",
             f"  Container: {self.container.container_type.name}",
             f"  Bancali:   {self.pallet_count}",
-            f"  Pannelli:  {self.panel_count}",
+            f"  Pannelli:  {self.panel_count} / {tot_order}{pct_str}",
             f"  Utilizzo:  {self.utilization_pct:.1f}%",
             f"  Score:     {self.score:.4f}",
         ]

@@ -90,7 +90,7 @@ HTML_TEMPLATE = """
             </div>
             <div class="score-box">
                 <div class="label">Pannelli Caricati</div>
-                <div class="value">{{ sol.panel_count }}</div>
+                <div class="value">{{ sol.panel_count }} / {{ sol.total_order_panels }} ({{ "%.1f"|format(sol.placed_pct) }}%)</div>
             </div>
             <div class="score-box">
                 <div class="label">Compattezza</div>

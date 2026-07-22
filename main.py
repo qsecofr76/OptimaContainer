@@ -431,7 +431,7 @@ class OptimaContainerApp:
                 self._log(
                     f"   #{i + 1} ({'BEST' if i==0 else 'Alternativa ' + str(i+1)}): Score={sol.score:.4f}, "
                     f"Bancali={sol.pallet_count}, "
-                    f"Pannelli={sol.panel_count}, "
+                    f"Pannelli={sol.panel_count}/{sol.total_order_panels} ({sol.placed_pct:.1f}%), "
                     f"Utilizzo={sol.utilization_pct:.1f}%"
                 )
 
@@ -470,6 +470,7 @@ class OptimaContainerApp:
                     f"Ottimizzazione completata!\n\n"
                     f"Soluzioni trovate: {n_sols}\n"
                     f"Miglior score: {best_s.score:.4f}\n"
+                    f"Pannelli caricati: {best_s.panel_count} / {best_s.total_order_panels} ({best_s.placed_pct:.1f}%)\n"
                     f"Utilizzo volume: {best_s.utilization_pct:.1f}%\n\n"
                     f"Report: {r_path}\n"
                     f"Vista 3D (Best): {b_path}",
