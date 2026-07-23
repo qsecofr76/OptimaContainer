@@ -216,14 +216,16 @@ def run_genetic_algorithm(panels: list[Panel], container_type: ContainerType, sc
         pass
 
     # Passaggio Invertito di Post-Ottimizzazione (Inverted Space-First Void Filler):
-    # Saturiamo gli spazi residui nel container costruendo a ritroso bancali su misura con i pannelli inesi
+    # Saturiamo gli spazi residui nel container eseguendo il riempimento ed il rabbocco
+    # SOLO sulle migliori 6 soluzioni candidate (invece di tutte le 60+ soluzioni grezze accumulate)
     from optimizer.container_packer import fill_remaining_container_voids
+    sorted_candidates = sorted(unique_solutions.values(), key=lambda s: s.score, reverse=True)[:6]
     final_solutions = []
-    for sol in unique_solutions.values():
+    for sol in sorted_candidates:
         sol_filled = fill_remaining_container_voids(sol, panels, container_type, score_fn=score_fn)
         final_solutions.append(sol_filled)
 
-    # Segnala completamento
+    # Segnala completamento finale
     if progress_callback and final_solutions:
         best = max(final_solutions, key=lambda s: s.score)
         progress_callback(n_generations, n_generations, best.score)

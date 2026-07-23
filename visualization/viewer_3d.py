@@ -43,8 +43,8 @@ def _get_mesh_box_coords(x1: float, x2: float, y1: float, y2: float, z1: float, 
     return x, y, z, i, j, k
 
 
-def create_3d_figure(solution: Solution, title: str = '') -> go.Figure:
-    """Crea visualizzazione 3D interattiva nitida con ispezione dei bancali ed ingombri in verde."""
+def create_3d_figure(solution: Solution, title: str = '', all_panels: list = None) -> go.Figure:
+    """Crea visualizzazione 3D interattiva nitida con ingombri visibili in verde (misura completata) o rosso (misura non completata)."""
     fig = go.Figure()
     ct = solution.container.container_type
 
@@ -65,12 +65,23 @@ def create_3d_figure(solution: Solution, title: str = '') -> go.Figure:
         hoverinfo='skip'
     ))
 
-    # Assegna colori univoci per ogni modello di pannello
-    all_panels = []
+    # Calcola totale e piazzati per articolo/modello nell'ordine
+    order_placed = Counter()
+    placed_panels = []
     for pallet in solution.container.pallets:
-        all_panels.extend(pallet.all_panels())
+        for p in pallet.all_panels():
+            placed_panels.append(p)
+            order_placed[p.codice_modello] += 1
 
-    unique_models = sorted(list(set(p.codice_modello for p in all_panels)))
+    order_totals = Counter()
+    if all_panels:
+        for p in all_panels:
+            order_totals[p.codice_modello] += 1
+    else:
+        for p in placed_panels:
+            order_totals[p.codice_modello] += 1
+
+    unique_models = sorted(list(set(p.codice_modello for p in placed_panels)))
     model_colors = {
         mod: MODEL_COLOR_PALETTE[idx % len(MODEL_COLOR_PALETTE)]
         for idx, mod in enumerate(unique_models)
@@ -82,9 +93,18 @@ def create_3d_figure(solution: Solution, title: str = '') -> go.Figure:
         # Raggruppamento articoli per questo bancale
         p_counts = Counter()
         p_details = {}
+        has_incomplete_measure = False
+
         for panel in pallet.all_panels():
-            p_counts[panel.codice_modello] += 1
-            p_details[panel.codice_modello] = f"{panel.larghezza_mm}x{panel.profondita_mm}x{panel.spessore_mm}mm (Ord: {panel.ordine_id})"
+            mod = panel.codice_modello
+            p_counts[mod] += 1
+            p_details[mod] = f"{panel.larghezza_mm}x{panel.profondita_mm}x{panel.spessore_mm}mm (Ord: {panel.ordine_id})"
+
+            # Se per questa misura nell'ordine sono rimasti pezzi inevasi -> misura incompleta!
+            placed_cnt = order_placed[mod]
+            tot_cnt = order_totals.get(mod, placed_cnt)
+            if placed_cnt < tot_cnt:
+                has_incomplete_measure = True
 
         art_lines = [f"• <b>{mod}</b>: {cnt} pz ({p_details[mod]})" for mod, cnt in p_counts.items()]
         art_summary = "<br>".join(art_lines)
@@ -94,10 +114,21 @@ def create_3d_figure(solution: Solution, title: str = '') -> go.Figure:
         bz1, bz2 = pallet.z, pallet.top_z
         collo_l, collo_w, collo_h = bx2 - bx1, by2 - by1, bz2 - bz1
 
-        # ── 1. Trace Ingombro Verde Trasparente per Debug ────────────────
+        # Colore ingombro: ROSSO se ha una misura non completata al 100%, VERDE se completata
+        if has_incomplete_measure:
+            box_color = '#FF0000'  # Rosso nitido per misura non completata
+            box_status = "⚠️ MISURA NON COMPLETATA AL 100% NELL'ORDINE"
+            box_label = "Ingombro Rosso (Misura Incompleta)"
+        else:
+            box_color = '#00FF00'  # Verde brillante per misura completata al 100%
+            box_status = "✅ MISURA COMPLETATA AL 100% NELL'ORDINE"
+            box_label = "Ingombro Verde (Completato)"
+
+        # ── 1. Trace Ingombro Mesh Trasparente ────────────────
         mx, my, mz, mi, mj, mk = _get_mesh_box_coords(bx1, bx2, by1, by2, bz1, bz2)
-        green_hover_text = (
-            f"<b>=== INGOMBRO REALE COLLO BANCALE #{pallet.pallet_id} ===</b><br>"
+        box_hover_text = (
+            f"<b>=== INGOMBRO COLLO BANCALE #{pallet.pallet_id} ===</b><br>"
+            f"Stato: <b>{box_status}</b><br>"
             f"Livello: {'1 (Pavimento)' if pallet.z <= 0.1 else '2 (Pianale)'}<br>"
             f"Ingombro Totale: {collo_l:.0f} x {collo_w:.0f} x {collo_h:.0f} mm<br>"
             f"Pannelli totali: {pallet.panel_count}<br><br>"
@@ -106,15 +137,15 @@ def create_3d_figure(solution: Solution, title: str = '') -> go.Figure:
 
         fig.add_trace(go.Mesh3d(
             x=mx, y=my, z=mz, i=mi, j=mj, k=mk,
-            color='#00FF00',
-            opacity=0.25,
-            name=f"Ingombro Verde #{pallet.pallet_id}",
+            color=box_color,
+            opacity=0.18,
+            name=f"Ingombro #{pallet.pallet_id}",
             hoverinfo='text',
-            text=green_hover_text,
-            visible='legendonly'  # Visibile su selezione o dal menu
+            text=box_hover_text,
+            showlegend=False
         ))
 
-        # Wireframe bordi dell'ingombro verde
+        # Wireframe bordi dell'ingombro (SEMPRE VISIBILE DI DEFAULT)
         g_edges = _get_box_edges(bx1, by1, bz1, collo_l, collo_w, collo_h)
         gx, gy, gz = [], [], []
         for pt in g_edges:
@@ -126,10 +157,9 @@ def create_3d_figure(solution: Solution, title: str = '') -> go.Figure:
         fig.add_trace(go.Scatter3d(
             x=gx, y=gy, z=gz,
             mode='lines',
-            line=dict(color='#00FF00', width=3),
-            name=f"Bordi Verde #{pallet.pallet_id}",
-            hoverinfo='skip',
-            visible='legendonly'
+            line=dict(color=box_color, width=3),
+            name=f"{box_label} #{pallet.pallet_id}",
+            hoverinfo='skip'
         ))
 
         # ── 2. Base EPAL di legno ─────────────────────────────────────────

@@ -431,7 +431,10 @@ def pack_panels_greedy(
             if pallet.layers:
                 mixed_pallets.append(pallet)
 
-    # 3. Se ci sono eventuali pannelli sciolti non impacchettati, usa il packer sequenziale per piccoli lotti (<= 30 pezzi)
+    # 3. Rabbocco in altezza dei bancali parziali/misti con eventuali pannelli rimasti
+    if mixed_pallets and remainder_panels:
+        remainder_panels = top_off_pallets(mixed_pallets, remainder_panels, max_target_load_height=target_load_height)
+
     if remainder_panels:
         if len(remainder_panels) <= 30:
             extra_pallets = _pack_panels_sequential(remainder_panels, strategy="area_desc", timeout_at=timeout_at)
@@ -440,6 +443,84 @@ def pack_panels_greedy(
     # 4. Ordina prima i bancali omogenei completi (altezza uniforme) e poi i bancali misti/parziali
     all_pallets = full_pallets + mixed_pallets
     return all_pallets
+
+
+def top_off_pallets(
+    pallets: list[Pallet],
+    unplaced_panels: list[Panel],
+    max_target_load_height: float = 1056.0,
+    max_orders_per_pallet: int = 3,
+) -> list[Panel]:
+    """
+    Rabbocca i bancali esistenti che non hanno raggiunto l'altezza massima di carico.
+    Inserisce le ante inattese dell'ordine rispettando la regola piramidale
+    e il limite di massimo ordini per bancale (default 3).
+    Restituisce i pannelli che rimangono ancora non piazzati.
+    """
+    if not unplaced_panels or not pallets:
+        return unplaced_panels
+
+    # Ordina i pannelli inattesi per area decrescente per creare strati stabili
+    sorted_unplaced = sorted(unplaced_panels, key=lambda p: (p.area, p.spessore_mm), reverse=True)
+    remaining_unplaced = []
+
+    for panel in sorted_unplaced:
+        placed = False
+        for pallet in pallets:
+            # Calcola altezza massima carica ammessa per questo bancale
+            available_h = max_target_load_height
+            if hasattr(pallet, 'z') and pallet.z > 0.1:
+                available_h = min(max_target_load_height, 2393.0 - pallet.z - EPAL_HEIGHT)
+
+            if pallet.load_height + panel.spessore_mm > available_h:
+                continue
+
+            # Limite ordini per bancale (max 3 per non degradare il rating)
+            current_orders = pallet.order_ids()
+            if panel.ordine_id and panel.ordine_id not in current_orders and len(current_orders) >= max_orders_per_pallet:
+                continue
+
+            surface_l, surface_w = _max_surface(pallet.n_epal)
+
+            # 1. Prova nei layer esistenti del bancale
+            for i, layer in enumerate(pallet.layers):
+                new_thickness = max(layer.thickness, panel.spessore_mm)
+                projected = layer.z_offset + new_thickness
+                above = sum(pallet.layers[j].thickness for j in range(i + 1, len(pallet.layers)))
+                if projected + above > available_h:
+                    continue
+
+                mfl = pallet.layers[i - 1].footprint_width if i > 0 else None
+                mfd = pallet.layers[i - 1].footprint_depth if i > 0 else None
+
+                placement = _try_place_in_layer(panel, layer, surface_l, surface_w, pallet.n_epal, mfl, mfd)
+                if placement:
+                    layer.placements.append(placement)
+                    placed = True
+                    break
+
+            if placed:
+                break
+
+            # 2. Prova in un nuovo layer in cima al bancale (rispettando la sagoma dell'ultimo layer)
+            z_offset = pallet.load_height if pallet.layers else 0.0
+            if z_offset + panel.spessore_mm <= available_h:
+                prev = pallet.layers[-1] if pallet.layers else None
+                mfl = prev.footprint_width if prev else None
+                mfd = prev.footprint_depth if prev else None
+
+                new_layer = PalletLayer(z_offset=z_offset)
+                placement = _try_place_in_layer(panel, new_layer, surface_l, surface_w, pallet.n_epal, mfl, mfd)
+                if placement:
+                    new_layer.placements.append(placement)
+                    pallet.layers.append(new_layer)
+                    placed = True
+                    break
+
+        if not placed:
+            remaining_unplaced.append(panel)
+
+    return remaining_unplaced
 
 
 def _pack_panels_sequential(

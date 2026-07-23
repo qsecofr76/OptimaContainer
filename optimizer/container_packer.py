@@ -156,8 +156,22 @@ def fill_remaining_container_voids(
 
     candidate_points = sorted(list(set(candidate_points)), key=lambda pt: (pt[2], pt[0], pt[1]))
 
-    from optimizer.pallet_packer import pack_panels_greedy
+    from optimizer.pallet_packer import pack_panels_greedy, top_off_pallets
 
+    # PASSAGGIO 1: Rabbocco in altezza dei bancali GIÀ CARICATI nel container con i pezzi inattesi
+    unplaced_panels = top_off_pallets(container.pallets, unplaced_panels, max_target_load_height=1056.0)
+
+    # Aggiorna l'elenco dei pannelli inattesi nella soluzione dopo il rabbocco
+    placed_ids = set()
+    for p in container.pallets:
+        for panel in p.all_panels():
+            placed_ids.add(panel.panel_id)
+
+    sol.unplaced_panel_ids = [pid for pid in sol.unplaced_panel_ids if pid not in placed_ids]
+    if not sol.unplaced_panel_ids or not unplaced_panels:
+        return sol
+
+    # PASSAGGIO 2: Per gli eventuali pezzi ancora inattesi, costruisce nuovi bancali nelle nicchie residue
     added_any = True
     while added_any and unplaced_panels:
         added_any = False

@@ -62,10 +62,17 @@ def evaluate_solution(solution: Solution) -> Solution:
                     p1, p2 = pos_list[i], pos_list[j]
                     dist = math.sqrt((p1[0]-p2[0])**2 + (p1[1]-p2[1])**2 + (p1[2]-p2[2])**2)
                     max_dist = max(max_dist, dist)
-            norm_dist = 1.0 - (max_dist / max_possible_dist)
-            grouping_scores.append(max(0.0, norm_dist))
-
     order_grouping = sum(grouping_scores) / len(grouping_scores) if grouping_scores else 1.0
+
+    # Penalizzazione per mixing ordini eccedente: mischiamento fino a 3 ordini per bancale consentito senza penalità,
+    # degrado del rating applicato soltanto oltre i 3 ordini per singolo bancale.
+    mixing_penalty = 0.0
+    for p in solution.container.pallets:
+        n_ord = len(p.order_ids())
+        if n_ord > 3:
+            mixing_penalty += (n_ord - 3) * 0.1
+
+    order_grouping = max(0.0, order_grouping - mixing_penalty)
 
     # 4. Stability (0.05)
     # Penalize pallets with excessive overhang

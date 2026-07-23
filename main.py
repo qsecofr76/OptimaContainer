@@ -440,31 +440,31 @@ class OptimaContainerApp:
             os.makedirs(output_dir, exist_ok=True)
 
             # Report HTML completo con confronto Top 4
-            report_path = generate_report(top_solutions, output_dir)
-            self._log(f"📄 Report HTML generato: {report_path}")
+            report_path = generate_report(top_solutions, output_dir, panels, log_fn=self._log)
+            self._log(f"📄 Report HTML generato con successo: {report_path}")
 
             best_path = os.path.join(output_dir, "best_solution_3d.html")
 
-            # Visualizzazione 3D per ciascuna delle Top 4 soluzioni
-            for idx, sol in enumerate(top_solutions):
-                rank_name = "BEST SOLUTION" if idx == 0 else f"Alternativa #{idx+1}"
-                fig = create_3d_figure(sol, title=f"Soluzione #{idx+1} ({rank_name}) — Score: {sol.score:.4f}")
-                sol_filename = f"solution_{idx+1}_3d.html"
-                sol_path = os.path.join(output_dir, sol_filename)
-                save_visualization(fig, sol_path)
-                self._log(f"🎨 Vista 3D #{idx+1} salvata: {sol_filename}")
-                if idx == 0:
-                    save_visualization(fig, best_path)
+            report_abs = os.path.abspath(report_path)
 
-            # Apri il report HTML completo nel browser
-            import webbrowser
-            report_uri = f"file://{os.path.abspath(report_path)}"
-            self.root.after(0, lambda: webbrowser.open(report_uri))
+            def _open_report(r_path=report_abs):
+                try:
+                    if hasattr(os, 'startfile'):
+                        os.startfile(r_path)
+                    else:
+                        import webbrowser
+                        import pathlib
+                        webbrowser.open(pathlib.Path(r_path).as_uri())
+                except Exception as err:
+                    self._log(f"⚠️ Impossibile aprire il browser automaticamente: {err}")
 
-            self.root.after(0, lambda: self.status_var.set("✅ Completato!"))
+            self._log(f"🌐 Apertura automatica report nel browser: {report_abs}")
+            self.root.after(0, _open_report)
+
+            self.root.after(0, lambda: self.status_var.set("✅ Completato! Report aperto nel browser."))
             self.root.after(0, lambda: self.progress.configure(value=100))
             self.root.after(
-                0,
+                100,
                 lambda b_path=best_path, r_path=report_path, n_sols=len(solutions), best_s=top_solutions[0]: messagebox.showinfo(
                     "Completato",
                     f"Ottimizzazione completata!\n\n"
@@ -472,8 +472,7 @@ class OptimaContainerApp:
                     f"Miglior score: {best_s.score:.4f}\n"
                     f"Pannelli caricati: {best_s.panel_count} / {best_s.total_order_panels} ({best_s.placed_pct:.1f}%)\n"
                     f"Utilizzo volume: {best_s.utilization_pct:.1f}%\n\n"
-                    f"Report: {r_path}\n"
-                    f"Vista 3D (Best): {b_path}",
+                    f"Report aperto nel browser:\n{r_path}",
                 ),
             )
 
@@ -587,20 +586,14 @@ def run_cli():
 
     # Output
     os.makedirs(args.output, exist_ok=True)
-    report_path = generate_report(top, args.output)
+    report_path = generate_report(top, args.output, panels)
     print(f"[REPORT HTML COMPLETO] {report_path}")
 
-    # Generazione dei 4 file 3D per ciascuna top soluzione
+    # File 3D e report generati da generate_report
     for idx, sol in enumerate(top):
-        rank_name = "BEST SOLUTION" if idx == 0 else f"Alternativa #{idx+1}"
-        fig = create_3d_figure(sol, title=f"Soluzione #{idx+1} ({rank_name}) - Score: {sol.score:.4f}")
         sol_filename = f"solution_{idx+1}_3d.html"
         sol_path = os.path.join(args.output, sol_filename)
-        save_visualization(fig, sol_path)
         print(f"[3D VIEW #{idx+1}] {sol_path}")
-        if idx == 0:
-            best_path = os.path.join(args.output, "best_solution_3d.html")
-            save_visualization(fig, best_path)
 
 
 # ═══════════════════════════════════════════════════════════
